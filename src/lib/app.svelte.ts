@@ -195,9 +195,12 @@ export function flush(): Promise<void> {
       try {
         saved = cleanPage(d.item);
         const merged = await store.savePage(d.nb, saved);
-        if (dirtyPages.get(id)?.v === d.v) dirtyPages.delete(id);
+        const untouched = dirtyPages.get(id)?.v === d.v;
+        if (untouched) dirtyPages.delete(id);
         outbox?.remove(id);
-        if (merged) applyMerged(d.nb, merged);
+        // If the user kept typing while the save was in flight, `merged` is stale relative to the live page:
+        // applying it would revert their keystrokes and flash a bogus "merged" toast. The next save merges it.
+        if (merged && untouched) applyMerged(d.nb, merged);
         indexPage(d.nb, merged ?? saved);
       } catch (e) {
         error = String(e);
