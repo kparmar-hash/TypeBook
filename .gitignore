@@ -1,0 +1,17 @@
+node_modules
+dist
+src-tauri/target
+src-tauri/gen
+public/pdfjs
+
+# secrets: never commit real env files (the example file is the template)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# a notes folder (local-folder mode) must never be committed, even if it ends up inside the project
+/notebooks/
+/typebook.json
+/.conflicts/

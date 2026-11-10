@@ -1,0 +1,113 @@
+:root,
+.force-light {
+  --ui-font: 'Inter', system-ui, sans-serif;
+  --mono-font: 'JetBrains Mono', ui-monospace, monospace;
+  --desk: #d9d6cf;
+  --chrome: #f3f1ec;
+  --chrome-2: #e8e5de;
+  --border: #d2cec5;
+  --text: #2a2926;
+  --muted: #7b776d;
+  --accent: #3b6fd4;
+  --accent-soft: rgba(59, 111, 212, 0.14);
+  --paper: #fbf6ea;
+  --rule: rgba(110, 150, 200, 0.38);
+  --margin-line: rgba(214, 110, 110, 0.55);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 10px 30px rgba(0, 0, 0, 0.14);
+  --ink-black: #24272b;
+  --ink-blue: #1f4fb8;
+  --ink-red: #c2362c;
+  --ink-green: #1d7a3e;
+  --ink-pencil: #6a6e75;
+  --mark: rgba(255, 221, 87, 0.55);
+  --code-bg: rgba(0, 0, 0, 0.07);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --desk: #121315;
+  --chrome: #1c1d20;
+  --chrome-2: #26272b;
+  --border: #33353a;
+  --text: #e4e2dc;
+  --muted: #8f8d86;
+  --accent: #7aa7ff;
+  --accent-soft: rgba(122, 167, 255, 0.18);
+  --paper: #25272c;
+  --rule: rgba(120, 140, 170, 0.22);
+  --margin-line: rgba(200, 110, 110, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.5);
+  --ink-black: #e8e6e1;
+  --ink-blue: #7ea8ff;
+  --ink-red: #ff8f82;
+  --ink-green: #6fd28f;
+  --ink-pencil: #a3a7ae;
+  --mark: rgba(255, 213, 79, 0.3);
+  --code-bg: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] {
+    --desk: #121315;
+    --chrome: #1c1d20;
+    --chrome-2: #26272b;
+    --border: #33353a;
+    --text: #e4e2dc;
+    --muted: #8f8d86;
+    --accent: #7aa7ff;
+    --accent-soft: rgba(122, 167, 255, 0.18);
+    --paper: #25272c;
+    --rule: rgba(120, 140, 170, 0.22);
+    --margin-line: rgba(200, 110, 110, 0.4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.5);
+    --ink-black: #e8e6e1;
+    --ink-blue: #7ea8ff;
+    --ink-red: #ff8f82;
+    --ink-green: #6fd28f;
+    --ink-pencil: #a3a7ae;
+    --mark: rgba(255, 213, 79, 0.3);
+    --code-bg: rgba(255, 255, 255, 0.1);
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--ui-font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--desk);
+  overflow: hidden;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+kbd {
+  font-family: var(--mono-font);
+  font-size: 11px;
+  background: var(--chrome-2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
