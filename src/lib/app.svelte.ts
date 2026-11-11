@@ -852,6 +852,23 @@ export function createBlockAt(x: number, y: number) {
   app.editingId = b.id;
 }
 
+/**
+ * Enter was pressed in a block: finish it and open a new one directly below, at the same left edge, holding `rest`
+ * (whatever followed the caret) with the caret at its start. `height` is the block's rendered height.
+ */
+export function newBlockBelow(blockId: string, height: number, rest: string) {
+  const p = curPage();
+  const nb = curNb();
+  const b = p?.blocks.find((x) => x.id === blockId);
+  if (!p || !nb || !b) return;
+  const L = lineHeightOf(nb);
+  let y = b.y + Math.max(height, L);
+  if (app.snap) y = TOP + Math.ceil((y - TOP) / L) * L; // round down-the-page, never back up into the block above
+  createBlockAt(b.x, y); // finishes this block (an empty one disappears) and starts the next
+  if (rest) setBlockText(p.blocks[p.blocks.length - 1], rest);
+  app.caret = 0;
+}
+
 export function beginEdit(id: string, caret: number | null = null) {
   if (app.editingId === id) return;
   finishEdit();

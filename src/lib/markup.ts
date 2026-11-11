@@ -139,28 +139,34 @@ export function rawOffsetInLine(raw: string, visible: number): number {
   return i;
 }
 
-/** The code block containing `pos` (a caret offset into `text`), if any. */
-function codeAt(text: string, pos: number) {
-  for (const seg of segment(text)) {
-    if (seg.kind === 'code' && pos >= seg.codeStart && pos <= seg.codeStart + seg.code.length) return seg;
-  }
-  return null;
+const count = (s: string, re: RegExp) => (s.match(re) ?? []).length;
+
+/** True when `pos` lies after an opening ``` that has not been closed before it (so inside a code block, even an unfinished one). */
+export const insideCode = (text: string, pos: number) => count(text.slice(0, pos), /```/g) % 2 === 1;
+
+/** True when `pos` lies inside a `$$` display-math block that is still open. Fenced code before it is ignored. */
+export function insideOpenMath(text: string, pos: number) {
+  return count(text.slice(0, pos).replace(/```[\s\S]*?```/g, ''), /\$\$/g) % 2 === 1;
 }
 
-export const insideCode = (text: string, pos: number) => codeAt(text, pos) !== null;
-
-/** Pressing Enter inside a code block: a new line that keeps the current line's indentation. Null outside code. */
-export function codeEnter(text: string, pos: number): string | null {
-  if (!codeAt(text, pos)) return null;
-  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
-  return '\n' + /^[ \t]*/.exec(text.slice(lineStart, pos))![0];
+/**
+ * What Enter should type to stay in the same block, or null when Enter should start a new block.
+ * Inside code it is a new line that keeps the current line's indentation; inside open display math, a plain new line.
+ * (Typing an opening fence or `$$` would be impossible otherwise: the line break after it has to stay in the block.)
+ */
+export function enterInsert(text: string, pos: number): string | null {
+  if (insideCode(text, pos)) {
+    const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+    return '\n' + /^[ \t]*/.exec(text.slice(lineStart, pos))![0];
+  }
+  return insideOpenMath(text, pos) ? '\n' : null;
 }
 
 export const CODE_INDENT = '  ';
 
 /** Shift+Tab inside a code block: the range of leading spaces (up to one indent) to remove from the caret's line. */
 export function codeOutdent(text: string, pos: number): { from: number; to: number } | null {
-  if (!codeAt(text, pos)) return null;
+  if (!insideCode(text, pos)) return null;
   const from = text.lastIndexOf('\n', pos - 1) + 1;
   const lead = /^[ \t]*/.exec(text.slice(from))![0];
   const n = lead.startsWith('\t') ? 1 : Math.min(lead.length, CODE_INDENT.length);

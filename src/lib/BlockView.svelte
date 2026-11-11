@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { app, beginEdit, finishEdit, setBlockText } from './app.svelte';
+  import { tick } from 'svelte';
+  import { app, beginEdit, finishEdit, newBlockBelow, setBlockText } from './app.svelte';
   import { openRef } from './pdfDoc';
-  import { CODE_INDENT, codeEnter, codeOutdent, insideCode, rawOffsetInLine, renderBlock } from './markup';
+  import { CODE_INDENT, codeOutdent, enterInsert, insideCode, rawOffsetInLine, renderBlock } from './markup';
   import type { Block } from './types';
 
   let {
@@ -25,6 +26,7 @@
   const LABELS: Record<string, string> = { definition: 'Definition', theorem: 'Theorem', exercise: 'Exercise', note: 'Note' };
 
   let viewEl = $state<HTMLDivElement>();
+  let rootEl = $state<HTMLDivElement>();
 
   const html = $derived(renderBlock(block.text));
 
@@ -84,6 +86,8 @@
     node.focus({ preventScroll: true });
     const caret = app.caret ?? node.value.length;
     node.setSelectionRange(caret, caret);
+    // a block started with Enter near the bottom of the window must come into view; one already visible does not move
+    node.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }
 
   /** Type into the textarea the way the user would, so it counts as input (and the app sees it). */
@@ -94,6 +98,15 @@
     }
   }
 
+  /** Split at the caret: the text before stays, the text after (and a fresh caret) goes to a new block just below. */
+  async function nextBlock(text: string, start: number, end: number) {
+    const before = text.slice(0, start).replace(/\s+$/, '');
+    const rest = text.slice(end).replace(/^\s+/, '');
+    if (before !== block.text) setBlockText(block, before);
+    await tick(); // let the block shrink to what is left, so the new one lands directly under it
+    newBlockBelow(block.id, rootEl?.offsetHeight ?? 0, rest);
+  }
+
   function key(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
@@ -102,15 +115,15 @@
       return;
     }
     if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
-    // Inside a fenced code block, Tab indents and Enter keeps the indentation (otherwise Tab would leave the box).
     const ta = e.currentTarget as HTMLTextAreaElement;
     const pos = ta.selectionStart;
-    if (e.key === 'Enter' && !e.shiftKey && pos === ta.selectionEnd) {
-      const ins = codeEnter(ta.value, pos);
-      if (ins) {
-        e.preventDefault();
-        insertText(ta, ins);
-      }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      // Enter starts a new block below; Shift+Enter is a line break inside this one. Inside code or an open $$ block
+      // Enter must stay in the block, or a fence or multi-line math could never be typed.
+      e.preventDefault();
+      const stay = enterInsert(ta.value, pos);
+      if (stay !== null) insertText(ta, stay);
+      else void nextBlock(ta.value, pos, ta.selectionEnd);
     } else if (e.key === 'Tab' && insideCode(ta.value, pos)) {
       e.preventDefault();
       if (!e.shiftKey) insertText(ta, CODE_INDENT);
@@ -131,6 +144,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="block"
+  bind:this={rootEl}
   class:editing
   class:selected={isSelected}
   data-item
@@ -168,7 +182,7 @@
         autocapitalize="off"
         oninput={(e) => setBlockText(block, e.currentTarget.value)}
         onkeydown={key}
-        onblur={() => document.hasFocus() && finishEdit()}
+        onblur={() => document.hasFocus() && app.editingId === block.id && finishEdit()}
       ></textarea>
     </div>
   {:else}

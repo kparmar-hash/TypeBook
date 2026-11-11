@@ -7,7 +7,8 @@
       [
         ['Click empty space', 'New block at that spot'],
         ['Click a block', 'Edit it, caret at the click'],
-        ['Enter', 'New line in the same block'],
+        ['Enter', 'New block below (splits at the caret)'],
+        ['Shift + Enter', 'New line inside the same block'],
         ['Esc / click away', 'Finish block (empty blocks vanish)'],
         ['Alt (while clicking)', 'Bypass snapping'],
         ['$…$  $$…$$', 'Inline / display math'],

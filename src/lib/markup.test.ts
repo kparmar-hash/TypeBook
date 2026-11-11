@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codeEnter, codeOutdent, insideCode, rawOffsetInLine, renderBlock, renderInline, segment } from './markup';
+import { codeOutdent, enterInsert, insideCode, insideOpenMath, rawOffsetInLine, renderBlock, renderInline, segment } from './markup';
 
 describe('renderInline', () => {
   it('formats bold, italic, highlight and code', () => {
@@ -107,6 +107,14 @@ describe('code blocks', () => {
   });
 });
 
+describe('open math detection', () => {
+  it('counts only unclosed $$', () => {
+    expect(insideOpenMath('$$ a', 4)).toBe(true);
+    expect(insideOpenMath('$$ a $$', 7)).toBe(false);
+    expect(insideOpenMath('$$ a $$ $$ b', 12)).toBe(true);
+  });
+});
+
 describe('typing inside code blocks', () => {
   const text = 'intro\n```js\nif (x) {\n  y();\n```';
   const at = (needle: string, extra = 0) => text.indexOf(needle) + extra;
@@ -117,10 +125,27 @@ describe('typing inside code blocks', () => {
     expect(insideCode(text, at('```js', 2))).toBe(false); // on the fence line itself
     expect(insideCode('no fence here', 3)).toBe(false);
   });
-  it('Enter keeps the indentation of the current line', () => {
-    expect(codeEnter(text, at('y();', 4))).toBe('\n  ');
-    expect(codeEnter(text, at('if (x)', 3))).toBe('\n');
-    expect(codeEnter(text, at('intro', 5))).toBeNull(); // outside code Enter behaves normally
+  it('Enter inside code keeps the indentation of the current line', () => {
+    expect(enterInsert(text, at('y();', 4))).toBe('\n  ');
+    expect(enterInsert(text, at('if (x)', 3))).toBe('\n');
+  });
+  it('Enter outside code and math starts a new block (null)', () => {
+    expect(enterInsert(text, at('intro', 5))).toBeNull();
+    expect(enterInsert('plain text', 5)).toBeNull();
+    expect(enterInsert('```js\ncode\n```', 14)).toBeNull(); // right after the closing fence
+  });
+  it('Enter stays in the block while a fence is still being typed (the opening line and anything after it)', () => {
+    expect(enterInsert('```python', 9)).toBe('\n');
+    expect(enterInsert('```python\n  x = 1', 17)).toBe('\n  ');
+  });
+  it('Enter stays in the block inside an open $$ math block, and leaves it once closed', () => {
+    expect(enterInsert('$$\\begin{aligned}', 17)).toBe('\n');
+    expect(enterInsert('$$ a \\\\\n b', 12)).toBe('\n');
+    expect(enterInsert('$$ x^2 $$', 9)).toBeNull();
+    expect(enterInsert('inline $x$ then more', 20)).toBeNull(); // single $ never counts
+  });
+  it('a $$ inside a closed code block does not count as open math', () => {
+    expect(enterInsert('```c\nprice = $$\n```\nafter', 'x'.length + 24)).toBeNull();
   });
   it('Shift+Tab removes one indent from the line, and only inside code', () => {
     const cut = codeOutdent(text, at('y();', 3))!;
