@@ -9,6 +9,7 @@
     setInk,
     setPagePaper,
     setTheme,
+    toggleSidebar,
     toggleSnap,
     undo,
     updateNotebook,
@@ -42,6 +43,20 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="bar" onmousedown={keepFocus}>
   {#if nb && page}
+    <button
+      class="panel"
+      class:on={app.sidebarOpen}
+      title="{app.sidebarOpen ? 'Hide' : 'Show'} pages ({mod}\)"
+      aria-label="{app.sidebarOpen ? 'Hide' : 'Show'} pages"
+      aria-pressed={app.sidebarOpen}
+      onclick={toggleSidebar}
+    >
+      <svg width="16" height="14" viewBox="0 0 16 14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="0.7" y="0.7" width="14.6" height="12.6" rx="2" />
+        <path d="M5.5 0.7v12.6" />
+        {#if app.sidebarOpen}<rect x="1.4" y="1.4" width="3.4" height="11.2" fill="currentColor" stroke="none" opacity="0.35" />{/if}
+      </svg>
+    </button>
     <label title="Paper for this page">
       Page
       <select value={page.paper} onchange={(e) => setPagePaper(e.currentTarget.value as Page['paper'])}>
@@ -230,6 +245,11 @@
   .seg button.on {
     background: var(--accent-soft);
     border-color: var(--accent);
+  }
+  .panel {
+    display: grid;
+    place-items: center;
+    padding: 4px 7px;
   }
   .grow {
     flex: 1;

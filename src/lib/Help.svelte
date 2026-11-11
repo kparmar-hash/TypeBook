@@ -11,6 +11,7 @@
         ['Esc / click away', 'Finish block (empty blocks vanish)'],
         ['Alt (while clicking)', 'Bypass snapping'],
         ['$…$  $$…$$', 'Inline / display math'],
+        ['```lang … ```', 'Code block (Tab indents, Enter keeps indent)'],
         ['**b** *i* ==h== `c`', 'Bold, italic, highlight, code'],
         ['- item   1. item', 'Bullet / numbered lines'],
         ['Right-click a block', 'Style, copy, delete'],
@@ -34,6 +35,7 @@
     [
       'Pages & app',
       [
+        ['Ctrl/Cmd + \\', 'Hide / show the pages sidebar'],
         ['Ctrl/Cmd+Shift + B', 'Back to the notebook list'],
         ['Ctrl/Cmd + N', 'New page'],
         ['Ctrl/Cmd + [  ]', 'Previous / next page'],

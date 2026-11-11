@@ -1,5 +1,4 @@
-import { differs } from './canonical';
-import { scrubPage } from './tombstones';
+import { pageDiffers } from './pageSync';
 import type { ExternalChange, Library, Notebook, Page, PageStore } from './types';
 
 const TOMBSTONE_MS = 30 * 24 * 3600 * 1000;
@@ -137,8 +136,9 @@ export class SupabaseStore implements PageStore {
     const merged = (await this.remote.rpc('save_page', { p_notebook_id: notebookId, p_page: page })) as Page;
     merged.blocks ??= [];
     merged.images ??= [];
-    // the server empties deleted content, so compare with what it would keep, not with what we sent
-    return differs(merged, scrubPage(page)) ? merged : null;
+    // Only report a real difference. A database hands blocks back sorted and empties deleted content, so
+    // comparing raw copies would claim a merge happened on nearly every save.
+    return pageDiffers(merged, page) ? merged : null;
   }
 
   async resolveConflicts(): Promise<number> {

@@ -16,6 +16,7 @@
     linkToPdfPage,
     setStyle,
     stepPage,
+    toggleSidebar,
     undo,
   } from './lib/app.svelte';
   import { copyDefault, copySelection, handlePasteEvent, pasteFromClipboard } from './lib/actions';
@@ -92,6 +93,9 @@
       e.preventDefault();
       finishEdit();
       openSearch();
+    } else if (mod && !e.shiftKey && !e.altKey && e.code === 'Backslash') {
+      e.preventDefault();
+      toggleSidebar();
     } else if (mod && e.shiftKey && !e.altKey && key === 'b') {
       e.preventDefault();
       void showNotebooks();
@@ -171,7 +175,8 @@
   <Welcome />
 {:else}
   <div class="shell">
-    <Sidebar />
+    <!-- the notebook list is always shown until a notebook is open, so it can never be hidden with nothing to pick -->
+    {#if app.sidebarOpen || !app.nbId}<Sidebar />{/if}
     <main>
       {#if app.nbId}
         <Toolbar />

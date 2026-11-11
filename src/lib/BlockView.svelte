@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app, beginEdit, finishEdit, setBlockText } from './app.svelte';
   import { openRef } from './pdfDoc';
-  import { rawOffsetInLine, renderBlock } from './markup';
+  import { CODE_INDENT, codeEnter, codeOutdent, insideCode, rawOffsetInLine, renderBlock } from './markup';
   import type { Block } from './types';
 
   let {
@@ -50,6 +50,15 @@
     if (!el || !line || !viewEl.contains(line)) return null;
     const start = Number(line.dataset.s);
     const end = Number(line.dataset.e);
+    if (line.classList.contains('cb')) {
+      // inside a code block: caret at the clicked character of the code itself
+      const code = line.querySelector('code');
+      if (!code || !code.contains(node)) return end;
+      const r = document.createRange();
+      r.setStart(code, 0);
+      r.setEnd(node, off);
+      return Number(line.dataset.cs) + r.toString().length;
+    }
     if (node.nodeType !== Node.TEXT_NODE || el.closest('.katex') || line.classList.contains('dm')) return end;
     let count = 0;
     const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
@@ -77,11 +86,44 @@
     node.setSelectionRange(caret, caret);
   }
 
+  /** Type into the textarea the way the user would, so it counts as input (and the app sees it). */
+  function insertText(ta: HTMLTextAreaElement, text: string) {
+    if (!document.execCommand?.('insertText', false, text)) {
+      ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end');
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
   function key(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
       finishEdit();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+    // Inside a fenced code block, Tab indents and Enter keeps the indentation (otherwise Tab would leave the box).
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    const pos = ta.selectionStart;
+    if (e.key === 'Enter' && !e.shiftKey && pos === ta.selectionEnd) {
+      const ins = codeEnter(ta.value, pos);
+      if (ins) {
+        e.preventDefault();
+        insertText(ta, ins);
+      }
+    } else if (e.key === 'Tab' && insideCode(ta.value, pos)) {
+      e.preventDefault();
+      if (!e.shiftKey) insertText(ta, CODE_INDENT);
+      else {
+        const cut = codeOutdent(ta.value, pos);
+        if (cut) {
+          ta.setSelectionRange(cut.from, cut.to);
+          if (!document.execCommand?.('delete')) {
+            ta.setRangeText('', cut.from, cut.to, 'end');
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      }
     }
   }
 </script>
@@ -302,6 +344,41 @@
   .view :global(.katex) {
     font-size: 1.02em;
     line-height: 1.2;
+  }
+  /* fenced code block: monospace, indentation kept, scrolls sideways instead of wrapping; no vertical padding so
+     later lines stay on the ruled grid */
+  .view :global(.cb) {
+    position: relative;
+    margin: 0;
+  }
+  .view :global(.cb pre) {
+    margin: 0;
+    padding: 0 10px;
+    font-family: var(--mono-font);
+    font-size: 0.72em;
+    line-height: var(--L); /* one ruled line per code line, whatever the font size */
+    white-space: pre;
+    overflow-x: auto;
+    tab-size: 2;
+    background: var(--code-bg);
+    border-radius: 4px;
+  }
+  .view :global(.cb code) {
+    font: inherit;
+    background: none;
+    padding: 0;
+  }
+  .view :global(.cb-lang) {
+    position: absolute;
+    top: 1px;
+    right: 6px;
+    z-index: 1;
+    font: 600 9px/1 var(--ui-font);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    opacity: 0.8;
+    pointer-events: none;
   }
   .view :global(code) {
     font-family: var(--mono-font);

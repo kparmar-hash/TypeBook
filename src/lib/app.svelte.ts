@@ -3,12 +3,11 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 import { createSupabaseClient, supabaseClient } from './auth.svelte';
-import { differs } from './canonical';
 import { readSupabaseConfig, type SupabaseEnv } from './env';
 import { FsPageStore } from './fsStore';
 import { Outbox } from './outbox';
 import { SupabaseStore } from './supabaseStore';
-import { scrubNotebook, scrubPage } from './tombstones';
+import { notebookDiffers, pageDiffers, patchPage } from './pageSync';
 import { createSupabaseRemote } from './supabaseRemote';
 import { MemoryStore } from './memStore';
 import { History, restoreBlocks, sameSnapshot, snapshotOf, type Snapshot } from './history';
@@ -86,6 +85,8 @@ export const app = $state({
   caret: null as number | null,
   theme: (ls.get('tb-theme') as Theme) || 'system',
   snap: ls.get('tb-snap') !== '0',
+  /** the pages sidebar can be hidden while writing; remembered between launches */
+  sidebarOpen: ls.get('tb-sidebar') !== '0',
   help: false,
   searchOpen: false,
   searchQuery: '',
@@ -195,12 +196,11 @@ export function flush(): Promise<void> {
       try {
         saved = cleanPage(d.item);
         const merged = await store.savePage(d.nb, saved);
-        const untouched = dirtyPages.get(id)?.v === d.v;
-        if (untouched) dirtyPages.delete(id);
+        if (dirtyPages.get(id)?.v === d.v) dirtyPages.delete(id); // edited again meanwhile: stays queued
         outbox?.remove(id);
-        // If the user kept typing while the save was in flight, `merged` is stale relative to the live page:
-        // applying it would revert their keystrokes and flash a bogus "merged" toast. The next save merges it.
-        if (merged && untouched) applyMerged(d.nb, merged);
+        // `merged` reflects the page as it was when the save began. applyMerged folds it into the live page, so
+        // anything typed while the request was in flight is kept.
+        if (merged) applyMerged(d.nb, merged);
         indexPage(d.nb, merged ?? saved);
       } catch (e) {
         error = String(e);
@@ -380,7 +380,8 @@ async function openRoot(path: string) {
   if (inTauri) ls.set('tb-root', path);
 }
 
-async function openStore(s: PageStore, label: string) {
+/** Open any store (exported so tests can drive the app against a real database). */
+export async function openStore(s: PageStore, label: string) {
   await flush();
   await stopWatching?.();
   stopWatching = null;
@@ -425,31 +426,29 @@ function reconcileOrder(nb: Notebook) {
   }
 }
 
-/** Replace a page's contents with a merged version, keeping an empty block that is being typed into. */
+/**
+ * Bring a page up to date with a merged copy, in place. Only what actually changed is touched, so the block being
+ * typed into keeps focus, the selection stays, and nothing unsaved is dropped.
+ */
 function applyRemote(p: Page, merged: Page) {
-  // The server empties deleted pages. Keep our copy of the content so Undo can still bring the page back.
-  if (merged.deleted) {
-    Object.assign(p, merged, { title: p.title, tags: p.tags, blocks: p.blocks, images: p.images });
-    return;
-  }
-  const keep = p.blocks.filter((b) => b.text === '' && !b.deleted && !merged.blocks.some((m) => m.id === b.id));
-  Object.assign(p, merged, { blocks: [...merged.blocks, ...keep] });
-  p.images ??= [];
-  if (app.editingId && !p.blocks.some((b) => b.id === app.editingId && !b.deleted)) app.editingId = null;
-  for (const id of [...selected]) {
-    if (!p.blocks.some((b) => b.id === id && !b.deleted) && !p.images.some((i) => i.id === id && !i.deleted))
-      selected.delete(id);
-  }
+  patchPage(p, merged);
+  // only a block that is now deleted can end an edit or a selection
+  const gone = (id: string) => !p.blocks.some((b) => b.id === id && !b.deleted) && !p.images.some((i) => i.id === id && !i.deleted);
+  if (app.editingId && gone(app.editingId)) app.editingId = null;
+  for (const id of [...selected]) if (gone(id)) selected.delete(id);
 }
 
-/** The store merged in changes from disk while saving; show them. */
+/** The store merged in changes from elsewhere while saving; fold them into the live page and show them. */
 function applyMerged(nbId: string, merged: Page) {
   if (nbId !== app.nbId) return;
   const p = app.pages.find((p) => p.id === merged.id);
   if (!p) return;
-  const before = $state.snapshot(p) as Page;
-  applyRemote(p, merged);
-  if (differs(scrubPage($state.snapshot(p) as Page), scrubPage(before))) toastMerged();
+  const local = $state.snapshot(p) as Page;
+  // `merged` predates anything typed since the save began, so merge it INTO the live page rather than over it
+  const next = mergePages(local, { ...merged, images: merged.images ?? [] });
+  if (!pageDiffers(next, local)) return;
+  applyRemote(p, next);
+  toastMerged();
 }
 
 function applyExternal(c: ExternalChange) {
@@ -472,9 +471,10 @@ function applyExternal(c: ExternalChange) {
   const local = $state.snapshot(existing) as Page;
   const merged = mergePages(local, { ...c.page, images: c.page.images ?? [] });
   indexPage(c.nbId, merged);
-  // compare as the server would keep them (it empties deleted content), or every delete would look like news
-  if (differs(scrubPage(merged), scrubPage(c.page))) markPage(existing); // the stored copy is behind: write back
-  if (!differs(scrubPage(merged), scrubPage(local))) return;
+  // Compare what is really stored (order, empty drafts and emptied deletions ignored) or every echo of our own
+  // save would look like news and set off another save.
+  if (pageDiffers(merged, c.page)) markPage(existing); // the stored copy is behind: write back
+  if (!pageDiffers(merged, local)) return;
   applyRemote(existing, merged);
   if (nb) reconcileOrder(nb);
   if (existing.deleted && app.pageId === existing.id) {
@@ -494,8 +494,9 @@ function applyExternalNotebook(c: Extract<ExternalChange, { type: 'notebook' }>)
   }
   const local = $state.snapshot(nb) as Notebook;
   const merged = mergeNotebooks(local, incoming);
-  if (differs(scrubNotebook(merged), scrubNotebook(incoming))) markNb(nb);
-  if (!differs(scrubNotebook(merged), scrubNotebook(local))) return;
+  const live = app.nbId === nb.id ? new Set(app.pages.filter((p) => !p.deleted).map((p) => p.id)) : undefined;
+  if (notebookDiffers(merged, incoming, live)) markNb(nb);
+  if (!notebookDiffers(merged, local, live)) return;
   // keep our own name and page order for a deleted notebook so Undo can restore them
   Object.assign(nb, merged, merged.deleted ? { name: nb.name, pageOrder: nb.pageOrder } : {});
   if (nb.deleted) {
@@ -951,6 +952,10 @@ export function setInk(ink: Ink) {
 export function setTheme(t: Theme) {
   app.theme = t;
   ls.set('tb-theme', t);
+}
+export function toggleSidebar() {
+  app.sidebarOpen = !app.sidebarOpen;
+  ls.set('tb-sidebar', app.sidebarOpen ? '1' : '0');
 }
 export function toggleSnap() {
   app.snap = !app.snap;

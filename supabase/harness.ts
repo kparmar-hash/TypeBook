@@ -1,9 +1,11 @@
 import { PGlite } from '@electric-sql/pglite';
 import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const DIR = new URL('./migrations/', import.meta.url);
+// resolved from the project root (tests run from there), because some test environments do not give file: URLs
+const DIR = join(process.cwd(), 'supabase', 'migrations');
 /** Every migration, in order, exactly as you would run them in the SQL editor. */
-export const MIGRATIONS = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort().map((f) => readFileSync(new URL(f, DIR), 'utf8'));
+export const MIGRATIONS = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort().map((f) => readFileSync(join(DIR, f), 'utf8'));
 export const MIGRATION = MIGRATIONS.join('\n');
 
 export const SUPABASE_STUBS = `

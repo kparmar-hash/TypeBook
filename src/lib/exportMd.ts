@@ -89,7 +89,8 @@ export function blocksToMarkdown(
 export function stripMarkup(text: string): string {
   const keep: string[] = [];
   const hold = (s: string) => `${keep.push(s) - 1}`;
-  let s = text.replace(/\$\$[\s\S]+?\$\$|\$[^$\n]+?\$/g, hold);
+  // code blocks keep their content untouched (their fence lines go); math keeps its source
+  let s = text.replace(/```[^\n`]*\n([\s\S]*?)\n?```|\$\$[\s\S]+?\$\$|\$[^$\n]+?\$/g, (m, code) => hold(code !== undefined ? code : m));
   s = s.replace(/`([^`\n]+)`/g, '$1').replace(/\*\*([^*\n]+?)\*\*/g, '$1').replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '$1').replace(/==([^=\n]+?)==/g, '$1');
   return s.replace(/(\d+)/g, (_, i) => keep[+i]);
 }

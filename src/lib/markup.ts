@@ -38,9 +38,17 @@ export function renderInline(line: string): string {
 
 export type Segment =
   | { kind: 'line'; raw: string; start: number }
-  | { kind: 'display'; raw: string; start: number; tex: string };
+  | { kind: 'display'; raw: string; start: number; tex: string }
+  | { kind: 'code'; raw: string; start: number; lang: string; code: string; codeStart: number };
 
-/** Split text into lines and display-math chunks, remembering raw offsets for caret mapping. */
+/**
+ * A fenced code block (```lang on its own line, closed by ```) or display math ($$ ... $$). One pass finds whichever
+ * comes first, so `$$` inside code is just code and a fence inside math is just math. An unclosed fence stays plain
+ * text until you close it.
+ */
+const BLOCK_RE = /```([^\n`]*)\n([\s\S]*?)\n?```|\$\$([\s\S]+?)\$\$/g;
+
+/** Split text into lines, display math and code blocks, remembering raw offsets for caret mapping. */
 export function segment(text: string): Segment[] {
   const out: Segment[] = [];
   const pushText = (chunk: string, base: number) => {
@@ -51,7 +59,7 @@ export function segment(text: string): Segment[] {
       off += l.length + 1;
     }
   };
-  const re = /\$\$([\s\S]+?)\$\$/g;
+  const re = new RegExp(BLOCK_RE.source, 'g');
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
@@ -61,7 +69,16 @@ export function segment(text: string): Segment[] {
     if (before.length || m.index === last) {
       if (before.length) pushText(before, base);
     }
-    out.push({ kind: 'display', raw: m[0], start: m.index, tex: m[1].trim() });
+    if (m[3] !== undefined) out.push({ kind: 'display', raw: m[0], start: m.index, tex: m[3].trim() });
+    else
+      out.push({
+        kind: 'code',
+        raw: m[0],
+        start: m.index,
+        lang: m[1].trim().split(/\s+/)[0] ?? '',
+        code: m[2],
+        codeStart: m.index + 3 + m[1].length + 1,
+      });
     last = m.index + m[0].length;
     if (text[last] === '\n') last++;
   }
@@ -76,6 +93,10 @@ export function renderBlock(text: string): string {
     .map((seg) => {
       if (seg.kind === 'display') {
         return `<div class="ln dm" data-s="${seg.start}" data-e="${seg.start + seg.raw.length}">${renderMath(seg.tex, true)}</div>`;
+      }
+      if (seg.kind === 'code') {
+        const lang = seg.lang ? `<span class="cb-lang">${escapeHtml(seg.lang)}</span>` : '';
+        return `<div class="ln cb" data-s="${seg.start}" data-e="${seg.start + seg.raw.length}" data-cs="${seg.codeStart}">${lang}<pre><code>${escapeHtml(seg.code)}</code></pre></div>`;
       }
       const attrs = `data-s="${seg.start}" data-e="${seg.start + seg.raw.length}"`;
       const li = LIST_RE.exec(seg.raw);
@@ -116,4 +137,32 @@ export function rawOffsetInLine(raw: string, visible: number): number {
     i++;
   }
   return i;
+}
+
+/** The code block containing `pos` (a caret offset into `text`), if any. */
+function codeAt(text: string, pos: number) {
+  for (const seg of segment(text)) {
+    if (seg.kind === 'code' && pos >= seg.codeStart && pos <= seg.codeStart + seg.code.length) return seg;
+  }
+  return null;
+}
+
+export const insideCode = (text: string, pos: number) => codeAt(text, pos) !== null;
+
+/** Pressing Enter inside a code block: a new line that keeps the current line's indentation. Null outside code. */
+export function codeEnter(text: string, pos: number): string | null {
+  if (!codeAt(text, pos)) return null;
+  const lineStart = text.lastIndexOf('\n', pos - 1) + 1;
+  return '\n' + /^[ \t]*/.exec(text.slice(lineStart, pos))![0];
+}
+
+export const CODE_INDENT = '  ';
+
+/** Shift+Tab inside a code block: the range of leading spaces (up to one indent) to remove from the caret's line. */
+export function codeOutdent(text: string, pos: number): { from: number; to: number } | null {
+  if (!codeAt(text, pos)) return null;
+  const from = text.lastIndexOf('\n', pos - 1) + 1;
+  const lead = /^[ \t]*/.exec(text.slice(from))![0];
+  const n = lead.startsWith('\t') ? 1 : Math.min(lead.length, CODE_INDENT.length);
+  return n ? { from, to: from + n } : null;
 }

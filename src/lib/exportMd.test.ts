@@ -79,3 +79,13 @@ describe('slug', () => {
     expect(slug('???')).toBe('untitled');
   });
 });
+
+describe('code blocks in exports', () => {
+  const code = '```py\nx = a * b * c\nif x: pass\n```';
+  it('markdown keeps the fence as written', () => {
+    expect(blocksToMarkdown([blk('a', 0, 0, 'Euclid in Python\n' + code)], [], L)).toBe('Euclid in Python\n' + code);
+  });
+  it('plain text drops the fence lines but leaves the code exactly as typed (no markup stripping)', () => {
+    expect(blocksToPlainText([blk('a', 0, 0, '**Note**\n' + code)], [], L)).toBe('Note\nx = a * b * c\nif x: pass');
+  });
+});

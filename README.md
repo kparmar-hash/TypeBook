@@ -79,4 +79,4 @@ Images you paste are stored in `notebooks/<id>/assets/`.
 
 ## Using it
 
-Press `?` in the app for the full shortcut list. Highlights: click empty space to start a block; `Esc` finishes it; `$…$` / `$$…$$` for math; drag the handle that appears at a block's top-left to move it; `Ctrl/Cmd`+drag to marquee select; `Ctrl/Cmd+Z` undo; `Ctrl/Cmd+N` new page; `Ctrl/Cmd+[` / `]` switch pages.
+Press `?` in the app for the full shortcut list. Highlights: click empty space to start a block; wrap code in a fence (```` ```python ```` on its own line, then ```` ``` ````) for a monospace code block, where `Tab` indents and `Enter` keeps your indentation; `Esc` finishes it; `$…$` / `$$…$$` for math; drag the handle that appears at a block's top-left to move it; `Ctrl/Cmd`+drag to marquee select; `Ctrl/Cmd+Z` undo; `Ctrl/Cmd+N` new page; `Ctrl/Cmd+[` / `]` switch pages.
